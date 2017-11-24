@@ -10,7 +10,9 @@
 #include "threads/palloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
+#include "threads/malloc.h"
 #include "threads/vaddr.h"
+#include "timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -27,6 +29,8 @@ static struct list ready_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
+
+static struct list sleeping_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -92,6 +96,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleeping_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -585,3 +590,23 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+bool tick_less_than (const struct list_elem *a,
+                     const struct list_elem *b,
+                     void *aux) {
+    ASSERT(aux == NULL);
+    ASSERT(a!=NULL);
+  ASSERT(b!=NULL);
+  struct sleeping_thread_data * elem_a = list_entry(a,struct sleeping_thread_data,elem);
+  struct sleeping_thread_data * elem_b = list_entry(b,struct sleeping_thread_data,elem);
+  return  elem_a->wake_up_ticks <= elem_b->wake_up_ticks;
+
+}
+void thread_block_time(uint64_t wake_up_tick) {
+  uint64_t start = timer_ticks();
+  struct sleeping_thread_data  *data = malloc(sizeof(struct sleeping_thread_data));
+  data->blocked_thread = thread_current();
+  data->wake_up_ticks =(uint64_t) start+wake_up_tick;
+  list_insert_ordered(&sleeping_list,&data->elem,tick_less_than,NULL);
+  thread_block();
+}
