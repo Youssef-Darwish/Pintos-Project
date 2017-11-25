@@ -585,7 +585,12 @@ void thread_block_time(uint64_t wake_up_tick) {
     data->blocked_thread = thread_current();
     data->wake_up_ticks = (uint64_t) start + wake_up_tick;
     list_insert_ordered(&sleeping_list, &data->elem, tick_less_than, NULL);
+//    enum intr_level old_level = intr_disable();
+    printf("before thread block\n");
+
     thread_block();
+//    intr_enable();
+    printf("passed thread block\n");
 }
 
 void wake_up_threads() {
