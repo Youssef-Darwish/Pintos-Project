@@ -98,12 +98,13 @@ shutdown_power_off (void)
 
   printf ("Powering off...\n");
   serial_flush ();
-
+  /* NOTE: ACPI soft shutdown */
+  outw (0xB004, 0x2000);
   /* This is a special power-off sequence supported by Bochs and
      QEMU, but not by physical hardware. */
   for (p = s; *p != '\0'; p++)
     outb (0x8900, *p);
-
+  shutdown_reboot();
   /* This will power off a VMware VM if "gui.exitOnCLIHLT = TRUE"
      is set in its configuration file.  (The "pintos" script does
      that automatically.)  */

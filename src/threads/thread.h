@@ -155,6 +155,6 @@ int thread_get_recent_cpu(void);
 
 int thread_get_load_avg(void);
 
-
+void wake_up_threads(void);
 
 #endif /* threads/thread.h */
