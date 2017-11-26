@@ -89,7 +89,6 @@ timer_elapsed(int64_t then) {
    be turned on. */
 void
 timer_sleep(int64_t ticks) {
-    int64_t start = timer_ticks();
 
     ASSERT (intr_get_level() == INTR_ON);
 //  while (timer_elapsed (start) < ticks)
@@ -169,7 +168,7 @@ timer_interrupt(struct intr_frame *args UNUSED) {
     thread_tick();
 
     // call a function to check sleeping threads
-    //wake_up_threads();          // not implemented yet
+    wake_up_threads();          // not implemented yet
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

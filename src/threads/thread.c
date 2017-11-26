@@ -575,30 +575,33 @@ bool tick_less_than(const struct list_elem *a,
     ASSERT(b != NULL);
     struct sleeping_thread_data *elem_a = list_entry(a, struct sleeping_thread_data, elem);
     struct sleeping_thread_data *elem_b = list_entry(b, struct sleeping_thread_data, elem);
-    return elem_a->wake_up_ticks <= elem_b->wake_up_ticks;
+
+    return elem_a->wake_up_ticks < elem_b->wake_up_ticks ||
+           (elem_a->wake_up_ticks == elem_b->wake_up_ticks && elem_a->blocked_thread->priority >
+                                                              elem_b->blocked_thread->priority);
 
 }
 
-void thread_block_time(uint64_t wake_up_tick) {
-    uint64_t start = timer_ticks();
+void thread_block_time(int64_t wake_up_tick) {
+    int64_t start = timer_ticks();
     struct sleeping_thread_data *data = malloc(sizeof(struct sleeping_thread_data));
     data->blocked_thread = thread_current();
-    data->wake_up_ticks = (uint64_t) start + wake_up_tick;
+    data->wake_up_ticks = (int64_t) start + wake_up_tick;
     list_insert_ordered(&sleeping_list, &data->elem, tick_less_than, NULL);
-//    enum intr_level old_level = intr_disable();
-    printf("before thread block\n");
+    enum intr_level old_level = intr_disable();
+//    printf("before thread block\n");
 
     thread_block();
-//    intr_enable();
-    printf("passed thread block\n");
+    intr_set_level(old_level);
+    // printf("passed thread block\n");
 }
 
 void wake_up_threads() {
     struct list_elem *e;
-    uint64_t t = (uint64_t )timer_ticks();
-    for (e = list_begin(&sleeping_list); e != list_end(&sleeping_list); e = list_next(e)){
-        struct sleeping_thread_data * data = list_entry(e,struct sleeping_thread_data,elem);
-        if(data->wake_up_ticks>t){
+    int64_t t = (int64_t) timer_ticks();
+    for (e = list_begin(&sleeping_list); e != list_end(&sleeping_list); e = list_next(e)) {
+        struct sleeping_thread_data *data = list_entry(e, struct sleeping_thread_data, elem);
+        if (data->wake_up_ticks > t) {
             break;
         }
         list_pop_front(&sleeping_list);
