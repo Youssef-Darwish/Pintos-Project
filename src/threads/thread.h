@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -86,8 +87,9 @@ struct thread {
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int acquired_priority;
     struct list_elem allelem;           /* List element for all threads list. */
-
+    struct lock *blocking_lock;        /* lock blocking thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -125,7 +127,9 @@ typedef void thread_func(void *aux);
 tid_t thread_create(const char *name, int priority, thread_func *, void *);
 
 void thread_block(void);
+
 void thread_block_time(int64_t wake_up_tick);
+
 void thread_unblock(struct thread *);
 
 struct thread *thread_current(void);
@@ -156,5 +160,9 @@ int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 
 void wake_up_threads(void);
+
+bool priority_greater_than(const struct list_elem *,        /* helper function to insert */
+                           const struct list_elem *,        /*threads in ready list by priority*/
+                           void *);
 
 #endif /* threads/thread.h */

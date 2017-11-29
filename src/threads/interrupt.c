@@ -46,7 +46,7 @@ static unsigned int unexpected_cnt[INTR_CNT];
    interrupt returns. */
 static bool in_external_intr;   /* Are we processing an external interrupt? */
 static bool yield_on_return;    /* Should we yield on interrupt return? */
-
+static bool yield_on_tick;
 /* Programmable Interrupt Controller helpers. */
 static void pic_init (void);
 static void pic_end_of_interrupt (int irq);
@@ -224,7 +224,14 @@ intr_yield_on_return (void)
   ASSERT (intr_context ());
   yield_on_return = true;
 }
-
+
+void
+yield_set(bool t) {
+   yield_on_tick = t;
+}
+bool yield_get() {
+    return  yield_on_tick;
+}
 /* 8259A Programmable Interrupt Controller. */
 
 /* Initializes the PICs.  Refer to [8259A] for details.
