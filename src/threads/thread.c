@@ -214,8 +214,17 @@ thread_create(const char *name, int priority,
 
     intr_set_level(old_level);
 
+    if (t->priority>thread_current()->acquired_priority){
+//        printf("higher priority when created\n");
+
+        list_insert_ordered(&ready_list, &(t->elem), priority_greater_than, NULL);
+        thread_yield();
+    }
+
+
     /* Add to run queue. */
-    thread_unblock(t);
+    else
+        thread_unblock(t);
 
     return tid;
 }
@@ -255,16 +264,16 @@ thread_unblock(struct thread *t) {
     list_insert_ordered(&ready_list, &(t->elem), priority_greater_than, NULL);
 //    printf("%d after insertion \n",list_size(&ready_list));
     t->status = THREAD_READY;
-    if(t->acquired_priority > thread_current()->acquired_priority) {
+    if (t->acquired_priority > thread_current()->acquired_priority) {
 
 //        printf("%d %s before scheduling \n",list_size(&ready_list)
 //                ,list_entry(list_begin(&ready_list),struct thread,elem )->name);
-       // thread_current()->status = THREAD_READY;
-       // schedule();
+        // thread_current()->status = THREAD_READY;
+        // schedule();
         yield_set(true);
 //        printf("%d %s after scheduling \n",list_size(&ready_list),running_thread()->name);
 
-        }
+    }
     intr_set_level(old_level);
 
 }
@@ -357,15 +366,16 @@ thread_set_priority(int new_priority) {
     thread_current()->priority = new_priority;
     thread_current()->acquired_priority = new_priority;
     struct thread *coming = NULL;
-    if(list_size(&ready_list) > 0)
-        coming = list_entry(list_begin(&ready_list),struct  thread , elem);
+    if (list_size(&ready_list) > 0)
+        coming = list_entry(list_begin(&ready_list), struct thread, elem);
     enum intr_level old_level = intr_disable();
-    if(coming != NULL && coming->acquired_priority > new_priority ) {
+    if (coming != NULL && coming->acquired_priority > new_priority) {
 
 //        thread_current()->status = THREAD_READY;
 //
 //        schedule();
-        yield_set(true);
+        thread_yield();
+        //yield_set(true);
     }
     intr_set_level(old_level);
 }
