@@ -174,8 +174,7 @@ lock_init(struct lock *lock) {
     ASSERT (lock != NULL);
 
     lock->holder = NULL;
-    lock->priority.value = PRI_MIN;
-    lock->priority.holder = lock;
+    lock->priority= PRI_MIN;
     sema_init(&lock->semaphore, 1);
 }
 
@@ -195,16 +194,24 @@ lock_acquire(struct lock *lock) {
     enum intr_level old_level = intr_disable();
     if (sema_try_down(&lock->semaphore)) {
         lock->holder = thread_current();
-        list_push_front(&thread_current()->donors,&lock->priority.elem);
-       // priority_donate(lock, thread_current()->priority);
+        list_push_front(&thread_current()->donors,&lock->elem);
+        if(thread_current()->priority > lock->priority) {
+            lock->priority = thread_current()->priority;
+            priority_donate(lock);
+        }
         intr_set_level(old_level);
         return;
     }
     thread_current()->blocking_lock = lock;
-    //priority_donate(lock, thread_current()->priority);
+
+    if(thread_current()->priority > lock->priority) {
+        lock->priority = thread_current()->priority;
+        priority_donate(lock);
+//        printf("%s %s names:\n",thread_current()->name,lock->holder->name);
+    }
     intr_set_level(old_level);
     sema_down(&lock->semaphore);
-    list_push_front(&thread_current()->donors,&lock->priority.elem);
+    list_push_front(&thread_current()->donors,&lock->elem);
     thread_current()->blocking_lock = NULL;
     lock->holder = thread_current();
 }
@@ -213,15 +220,10 @@ lock_acquire(struct lock *lock) {
  *
  */
 void
-priority_donate(struct lock *lock, struct lock_priority * donor) {
+priority_donate(struct lock *lock) {
     ASSERT(lock != NULL);
-    //ASSERT(lock->holder != NULL);
-    int priority = donor->value;
-    if (lock->priority.value >= priority)
-        return;
-    lock->priority.value = priority;
     if (lock->holder != NULL && thread_current() != lock->holder)
-        thread_donate_priority(lock->holder,donor);
+        thread_donate_priority(lock->holder,lock);
 }
 
 bool
@@ -230,22 +232,25 @@ lock_max_func (const struct list_elem *a,
                          void *aux){
     ASSERT(a!=NULL);
     ASSERT(b!=NULL);
-    struct lock_priority * elem_a = list_entry(a,struct lock_priority,elem);
+    struct lock * elem_a = list_entry(a,struct lock,elem);
 
-    struct lock_priority * elem_b = list_entry(b,struct lock_priority,elem);
-    return elem_a->value > elem_b->value;
+    struct lock * elem_b = list_entry(b,struct lock,elem);
+    return elem_a->priority > elem_b->priority;
 }
 /* Donates priority to thread
  */
 void
-thread_donate_priority(struct thread *receiver, struct lock_priority *donor) {
-    int priority = donor->value;
+thread_donate_priority(struct thread *receiver, struct lock *donor) {
+    int priority = donor->priority;
     if (priority <= receiver->priority)
         return;
     receiver->priority = priority;
-    //list_push_front(&receiver->donors,&donor->elem);
-    if (receiver->status == THREAD_BLOCKED && receiver->blocking_lock != NULL)
-        priority_donate(receiver->blocking_lock, receiver);
+    if (receiver->status == THREAD_BLOCKED && receiver->blocking_lock != NULL) {
+        if(receiver->blocking_lock->priority >= priority)
+            return;
+        receiver->blocking_lock->priority = priority;
+        priority_donate(receiver->blocking_lock);
+    }
 
 }
 /* Tries to acquires LOCK and returns true if successful or false
@@ -278,11 +283,19 @@ lock_release(struct lock *lock) {
     ASSERT (lock_held_by_current_thread(lock));
 
     lock->holder = NULL;
-    list_remove(&lock->priority.elem);
-    struct  lock_priority * max_pr= list_entry(list_max(&thread_current()->donors,lock_max_func,NULL),
-    struct lock_priority,elem);
-    thread_current()->priority = max_pr->value;
-    lock->priority.value = PRI_MIN;
+    list_remove(&lock->elem);
+    if(list_empty(&thread_current()->donors)) {
+     thread_current()->priority = thread_current()->default_priority;
+    }
+    else {
+        struct lock *max_pr = list_entry(list_max(&thread_current()->donors, lock_max_func, NULL),
+                                         struct lock, elem);
+
+        thread_current()->priority = (max_pr->priority);
+        if(thread_current()->default_priority > thread_current()->priority)
+            thread_current()->priority = thread_current()->default_priority;
+    }
+    lock->priority = PRI_MIN;
     sema_up(&lock->semaphore);
 }
 

@@ -214,8 +214,8 @@ thread_create(const char *name, int priority,
     intr_set_level(old_level);
 
     if (t->priority>thread_current()->priority){
-//        printf("higher priority when created\n");
-
+        //printf("higher priority when created\n");
+       // printf("%d %d \n",t->priority,thread_current()->priority);
         list_insert_ordered(&ready_list, &(t->elem), priority_greater_than, NULL);
         thread_yield();
     }
@@ -355,7 +355,19 @@ thread_foreach(thread_action_func *func, void *aux) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority(int new_priority) {
-    thread_current()->priority = new_priority;
+    thread_current()->default_priority = new_priority;
+    //thread_current()->priority = new_priority; // TODO to change this
+    if(list_empty(&thread_current()->donors)) {
+        thread_current()->priority = thread_current()->default_priority;
+    }
+    else {
+        struct lock *max_pr = list_entry(list_max(&thread_current()->donors, lock_max_func, NULL),
+                                         struct lock, elem);
+
+        thread_current()->priority = (max_pr->priority);
+        if(thread_current()->default_priority > thread_current()->priority)
+            thread_current()->priority = thread_current()->default_priority;
+    }
     struct thread *coming = NULL;
     if (list_size(&ready_list) > 0)
         coming = list_entry(list_begin(&ready_list), struct thread, elem);
@@ -483,13 +495,10 @@ init_thread(struct thread *t, const char *name, int priority) {
     t->status = THREAD_BLOCKED;
     strlcpy(t->name, name, sizeof t->name);
     t->stack = (uint8_t *) t + PGSIZE;
-    t->priority = priority;
+    t->priority =t->default_priority =  priority;
     t->blocking_lock = NULL;
     t->magic = THREAD_MAGIC;
     list_init(&t->donors);
-    struct  lock_priority dummy;
-    dummy.value = priority;
-    list_push_front(&t->donors,&dummy.elem);
     list_push_back(&all_list, &t->allelem);
 }
 
