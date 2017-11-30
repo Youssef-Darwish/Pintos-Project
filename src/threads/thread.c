@@ -196,7 +196,6 @@ thread_create(const char *name, int priority,
        Do this atomically so intermediate values for the 'stack'
        member cannot be observed. */
     old_level = intr_disable();
-
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);
     kf->eip = NULL;
@@ -214,7 +213,7 @@ thread_create(const char *name, int priority,
 
     intr_set_level(old_level);
 
-    if (t->priority>thread_current()->acquired_priority){
+    if (t->priority>thread_current()->priority){
 //        printf("higher priority when created\n");
 
         list_insert_ordered(&ready_list, &(t->elem), priority_greater_than, NULL);
@@ -260,22 +259,15 @@ thread_unblock(struct thread *t) {
 
     old_level = intr_disable();
     ASSERT (t->status == THREAD_BLOCKED);
-//    printf("%d before insertion \n",list_size(&ready_list));
     list_insert_ordered(&ready_list, &(t->elem), priority_greater_than, NULL);
-//    printf("%d after insertion \n",list_size(&ready_list));
     t->status = THREAD_READY;
-    if (t->acquired_priority > thread_current()->acquired_priority) {
-
-//        printf("%d %s before scheduling \n",list_size(&ready_list)
-//                ,list_entry(list_begin(&ready_list),struct thread,elem )->name);
-        // thread_current()->status = THREAD_READY;
-        // schedule();
-        yield_set(true);
-//        printf("%d %s after scheduling \n",list_size(&ready_list),running_thread()->name);
-
+    if (t->priority > thread_current()->priority) {
+        if(intr_context())
+            intr_yield_on_return();
+        else
+            thread_yield();
     }
     intr_set_level(old_level);
-
 }
 
 /* Returns the name of the running thread. */
@@ -364,16 +356,17 @@ thread_foreach(thread_action_func *func, void *aux) {
 void
 thread_set_priority(int new_priority) {
     thread_current()->priority = new_priority;
-    thread_current()->acquired_priority = new_priority;
     struct thread *coming = NULL;
     if (list_size(&ready_list) > 0)
         coming = list_entry(list_begin(&ready_list), struct thread, elem);
     enum intr_level old_level = intr_disable();
-    if (coming != NULL && coming->acquired_priority > new_priority) {
+    if (coming != NULL && coming->priority > new_priority) {
 
 //        thread_current()->status = THREAD_READY;
 //
 //        schedule();
+
+        intr_set_level(old_level);
         thread_yield();
         //yield_set(true);
     }
@@ -491,9 +484,12 @@ init_thread(struct thread *t, const char *name, int priority) {
     strlcpy(t->name, name, sizeof t->name);
     t->stack = (uint8_t *) t + PGSIZE;
     t->priority = priority;
-    t->acquired_priority = priority;
     t->blocking_lock = NULL;
     t->magic = THREAD_MAGIC;
+    list_init(&t->donors);
+    struct  lock_priority dummy;
+    dummy.value = priority;
+    list_push_front(&t->donors,&dummy.elem);
     list_push_back(&all_list, &t->allelem);
 }
 
@@ -581,7 +577,7 @@ schedule(void) {
     ASSERT (intr_get_level() == INTR_OFF);
     ASSERT (cur->status != THREAD_RUNNING);
     ASSERT (is_thread(next));
-    yield_set(false);
+//    yield_set(false);
     if (cur != next)
         prev = switch_threads(cur, next);
     thread_schedule_tail(prev);
@@ -628,7 +624,7 @@ bool priority_greater_than(const struct list_elem *a,
     struct thread *elem_a = list_entry(a, struct thread, elem);
     struct thread *elem_b = list_entry(b, struct thread, elem);
 
-    return elem_a->acquired_priority > elem_b->acquired_priority;
+    return elem_a->priority > elem_b->priority;
 
 
 }
