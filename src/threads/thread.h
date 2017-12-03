@@ -14,6 +14,13 @@ enum thread_status {
     THREAD_DYING        /* About to be destroyed. */
 };
 
+enum element_type{
+    ready_elem,
+    wait_elem,
+    all_element
+};
+
+
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
@@ -93,6 +100,7 @@ struct thread {
     struct lock *blocking_lock;        /* lock blocking thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct list_elem waiting_elem;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

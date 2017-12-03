@@ -627,12 +627,22 @@ bool tick_less_than(const struct list_elem *a,
 bool priority_greater_than(const struct list_elem *a,
                            const struct list_elem *b,
                            void *aux) {
-    ASSERT(aux == NULL);
+
+
+    struct thread *elem_a ;
+    struct thread *elem_b ;
     ASSERT(a != NULL);
     ASSERT(b != NULL);
-    struct thread *elem_a = list_entry(a, struct thread, elem);
-    struct thread *elem_b = list_entry(b, struct thread, elem);
 
+    if(aux==NULL || ((enum element_type)aux)== ready_elem) {
+
+
+        elem_a = list_entry(a, struct thread, elem);
+        elem_b = list_entry(b, struct thread, elem);
+    }else if( ((enum element_type)aux)== wait_elem){
+        elem_a = list_entry(a, struct thread, waiting_elem);
+        elem_b = list_entry(b, struct thread, waiting_elem);
+    }
     return elem_a->priority > elem_b->priority;
 
 
