@@ -18,6 +18,7 @@
 #include "userprog/process.h"
 #endif
 
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -26,6 +27,12 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+
+
+static real load_average;
+
+static real recent_cpu;
+
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -213,15 +220,15 @@ thread_create(const char *name, int priority,
 
     intr_set_level(old_level);
 
-    if (t->priority>thread_current()->priority){
+    if (t->priority > thread_current()->priority) {
         //printf("higher priority when created\n");
-       // printf("%d %d \n",t->priority,thread_current()->priority);
+        // printf("%d %d \n",t->priority,thread_current()->priority);
         list_insert_ordered(&ready_list, &(t->elem), priority_greater_than, NULL);
         thread_yield();
     }
 
 
-    /* Add to run queue. */
+        /* Add to run queue. */
     else
         thread_unblock(t);
 
@@ -262,7 +269,7 @@ thread_unblock(struct thread *t) {
     list_insert_ordered(&ready_list, &(t->elem), priority_greater_than, NULL);
     t->status = THREAD_READY;
     if (t->priority > thread_current()->priority) {
-        if(intr_context())
+        if (intr_context())
             intr_yield_on_return();
         else
             thread_yield();
@@ -357,15 +364,14 @@ void
 thread_set_priority(int new_priority) {
     thread_current()->default_priority = new_priority;
     //thread_current()->priority = new_priority; // TODO to change this
-    if(list_empty(&thread_current()->donors)) {
+    if (list_empty(&thread_current()->donors)) {
         thread_current()->priority = thread_current()->default_priority;
-    }
-    else {
+    } else {
         struct lock *max_pr = list_entry(list_max(&thread_current()->donors, lock_max_func, NULL),
                                          struct lock, elem);
 
         thread_current()->priority = (max_pr->priority);
-        if(thread_current()->default_priority > thread_current()->priority)
+        if (thread_current()->default_priority > thread_current()->priority)
             thread_current()->priority = thread_current()->default_priority;
     }
     struct thread *coming = NULL;
@@ -393,15 +399,17 @@ thread_get_priority(void) {
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice(int nice UNUSED) {
-    /* Not yet implemented. */
+thread_set_nice(int nice ) {
+    thread_current()->nice=nice;
+
+    calculate_load_average();
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice(void) {
-    /* Not yet implemented. */
-    return 0;
+
+    return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -495,7 +503,7 @@ init_thread(struct thread *t, const char *name, int priority) {
     t->status = THREAD_BLOCKED;
     strlcpy(t->name, name, sizeof t->name);
     t->stack = (uint8_t *) t + PGSIZE;
-    t->priority =t->default_priority =  priority;
+    t->priority = t->default_priority = priority;
     t->blocking_lock = NULL;
     t->magic = THREAD_MAGIC;
     list_init(&t->donors);
@@ -553,7 +561,8 @@ thread_schedule_tail(struct thread *prev) {
     cur->status = THREAD_RUNNING;
     /* Start new time slice. */
     thread_ticks = 0;
-
+    load_average = 0;
+    recent_cpu = 0;
 #ifdef USERPROG
     /* Activate the new address space. */
     process_activate ();
@@ -629,17 +638,17 @@ bool priority_greater_than(const struct list_elem *a,
                            void *aux) {
 
 
-    struct thread *elem_a ;
-    struct thread *elem_b ;
+    struct thread *elem_a;
+    struct thread *elem_b;
     ASSERT(a != NULL);
     ASSERT(b != NULL);
 
-    if(aux==NULL || ((enum element_type)aux)== ready_elem) {
+    if (aux == NULL || ((enum element_type) aux) == ready_elem) {
 
 
         elem_a = list_entry(a, struct thread, elem);
         elem_b = list_entry(b, struct thread, elem);
-    }else if( ((enum element_type)aux)== wait_elem){
+    } else if (((enum element_type) aux) == wait_elem) {
         elem_a = list_entry(a, struct thread, waiting_elem);
         elem_b = list_entry(b, struct thread, waiting_elem);
     }
@@ -677,5 +686,34 @@ void wake_up_threads() {
 
     }
 
+}
+
+int calculate_priority() {
+
+    calculate_load_average();
+    update_recent_cpu();
+    real rcpu = divide(recent_cpu,int_to_real(4));
+
+    real nic2 = multiply(int_to_real(thread_get_nice()),int_to_real(2));
+    return PRI_MAX - real_to_int(add(rcpu,nic2));
+}
+
+void update_recent_cpu() {
+    real fact = divide(2*load_average,add(2*load_average,int_to_real(1)));
+    recent_cpu = multiply(recent_cpu,fact);
+    recent_cpu = add(recent_cpu,int_to_real(thread_get_nice()));
+
+
+}
+
+void calculate_load_average() {
+
+    real first_operand = multiply(divide(int_to_real(59),int_to_real(60)),load_average);
+    int ready_threads_num =(int) list_size(&ready_list);
+    real second_operand = multiply(divide(int_to_real(1),int_to_real(60))
+                                   ,int_to_real(ready_threads_num));
+
+
+    load_average = add(first_operand,second_operand);
 }
 

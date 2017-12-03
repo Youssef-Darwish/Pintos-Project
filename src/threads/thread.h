@@ -5,7 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
-
+#include "fixed-point.h"
 /* States in a thread's life cycle. */
 enum thread_status {
     THREAD_RUNNING,     /* Running thread. */
@@ -102,6 +102,7 @@ struct thread {
     struct list_elem elem;              /* List element. */
     struct list_elem waiting_elem;
 
+    int nice;
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -173,5 +174,11 @@ void wake_up_threads(void);
 bool priority_greater_than(const struct list_elem *,        /* helper function to insert */
                            const struct list_elem *,        /*threads in ready list by priority*/
                            void *);
+
+int calculate_priority();
+
+void update_recent_cpu();
+
+void calculate_load_average();
 
 #endif /* threads/thread.h */
