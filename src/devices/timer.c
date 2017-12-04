@@ -167,8 +167,9 @@ timer_interrupt(struct intr_frame *args UNUSED) {
     ticks++;
     thread_tick();
 
-    // call a function to check sleeping threads
-    wake_up_threads();          // not implemented yet
+    // function to check sleeping threads
+    wake_up_threads();
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

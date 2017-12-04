@@ -31,7 +31,6 @@ static struct list ready_list;
 
 static real load_average;
 
-static real recent_cpu;
 
 
 /* List of all processes.  Processes are added to this list
@@ -60,7 +59,7 @@ struct kernel_thread_frame {
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
-
+static int seconds;
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
@@ -152,9 +151,24 @@ thread_tick(void) {
     else
         kernel_ticks++;
 
+    if (thread_mlfqs) {
+        thread_current()->recent_cpu =
+                add(thread_current()->recent_cpu,int_to_real(1));
+        if(timer_ticks()%TIMER_FREQ ==0){
+            printf("entered\n");
+            calculate_load_average();
+            update_recent_cpu();
+            seconds++;
+        }
+        thread_set_priority(calculate_priority());
+    }
     /* Enforce preemption. */
-    if (++thread_ticks >= TIME_SLICE || yield_get())
+    if (++thread_ticks >= TIME_SLICE || yield_get()) {
+
+
         intr_yield_on_return();
+    }
+
 }
 
 /* Prints thread statistics. */
@@ -399,10 +413,11 @@ thread_get_priority(void) {
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice(int nice ) {
-    thread_current()->nice=nice;
+thread_set_nice(int nice) {
+    thread_current()->nice = nice;
 
-    calculate_load_average();
+    thread_set_priority(calculate_priority());
+
 }
 
 /* Returns the current thread's nice value. */
@@ -415,15 +430,15 @@ thread_get_nice(void) {
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg(void) {
-    /* Not yet implemented. */
-    return 0;
+    // printf("%d load_average\n",load_average);
+    return real_to_int(load_average * 100);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu(void) {
-    /* Not yet implemented. */
-    return 0;
+
+    return real_to_int(thread_current()->recent_cpu * 100);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -561,8 +576,7 @@ thread_schedule_tail(struct thread *prev) {
     cur->status = THREAD_RUNNING;
     /* Start new time slice. */
     thread_ticks = 0;
-    load_average = 0;
-    recent_cpu = 0;
+    seconds=0;
 #ifdef USERPROG
     /* Activate the new address space. */
     process_activate ();
@@ -690,30 +704,33 @@ void wake_up_threads() {
 
 int calculate_priority() {
 
-    calculate_load_average();
-    update_recent_cpu();
-    real rcpu = divide(recent_cpu,int_to_real(4));
 
-    real nic2 = multiply(int_to_real(thread_get_nice()),int_to_real(2));
-    return PRI_MAX - real_to_int(add(rcpu,nic2));
+
+    real rcpu = divide(thread_current()->recent_cpu, int_to_real(4));
+//    printf("%d recpu\n",rcpu);
+    real nic2 = multiply(int_to_real(thread_get_nice()), int_to_real(2));
+//    printf("%d nice\n",nic2);
+
+    return PRI_MAX - real_to_int(add(rcpu, nic2));
 }
 
 void update_recent_cpu() {
-    real fact = divide(2*load_average,add(2*load_average,int_to_real(1)));
-    recent_cpu = multiply(recent_cpu,fact);
-    recent_cpu = add(recent_cpu,int_to_real(thread_get_nice()));
+    real fact = divide(2 * load_average, add(2 * load_average, int_to_real(1)));
+    thread_current()->recent_cpu = multiply(thread_current()->recent_cpu, fact);
+    thread_current()->recent_cpu = add(thread_current()->recent_cpu,
+                                       int_to_real(thread_get_nice()));
 
 
 }
 
 void calculate_load_average() {
 
-    real first_operand = multiply(divide(int_to_real(59),int_to_real(60)),load_average);
-    int ready_threads_num =(int) list_size(&ready_list);
-    real second_operand = multiply(divide(int_to_real(1),int_to_real(60))
-                                   ,int_to_real(ready_threads_num));
+    real first_operand = multiply(divide(int_to_real(59), int_to_real(60)), load_average);
+    int ready_threads_num = (int) (list_size(&ready_list) + 1);
+    real second_operand = divide(int_to_real(ready_threads_num), int_to_real(60));
 
+    printf("%d    %d in load average\n",int_to_real(60),second_operand);
+    load_average = add(first_operand, second_operand);
 
-    load_average = add(first_operand,second_operand);
 }
 

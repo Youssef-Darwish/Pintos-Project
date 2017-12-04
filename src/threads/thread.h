@@ -101,7 +101,7 @@ struct thread {
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     struct list_elem waiting_elem;
-
+    real recent_cpu;
     int nice;
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

@@ -5,7 +5,8 @@
 #ifndef PINTOS_FIXED_POINT_H
 #define PINTOS_FIXED_POINT_H
 #define real int
-#define converter 1<<14
+#define converter 1<<6
+
 
 /*/
  *
