@@ -4,20 +4,23 @@
 
 #ifndef PINTOS_FIXED_POINT_H
 #define PINTOS_FIXED_POINT_H
-#define real int
-#define converter 1<<6
 
+#include <lib/stdint.h>
+
+#define real int64_t
+#define converter 1<<14
+#define shift 14
 
 /*/
  *
  */
 
 
-real int_to_real(int );
+real int_to_real(int64_t );
 
-int real_to_int(real );
+int64_t  real_to_int(int64_t  );
 
-int round_real_to_int(real);
+int64_t  round_real_to_int(real);
 
 real add (real ,real);
 

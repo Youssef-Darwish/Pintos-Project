@@ -91,9 +91,6 @@ void
 timer_sleep(int64_t ticks) {
 
     ASSERT (intr_get_level() == INTR_ON);
-//  while (timer_elapsed (start) < ticks)
-//    thread_yield ();
-
     thread_block_time(ticks);
 
 }
@@ -166,8 +163,6 @@ static void
 timer_interrupt(struct intr_frame *args UNUSED) {
     ticks++;
     thread_tick();
-
-    // function to check sleeping threads
     wake_up_threads();
 
 }

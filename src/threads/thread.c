@@ -32,7 +32,6 @@ static struct list ready_list;
 static real load_average;
 
 
-
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -105,7 +104,7 @@ static tid_t allocate_tid(void);
 void
 thread_init(void) {
     ASSERT (intr_get_level() == INTR_OFF);
-    printf("entered\n\n");
+//    printf("entered\n\n");
     lock_init(&tid_lock);
     list_init(&ready_list);
     list_init(&all_list);
@@ -152,17 +151,29 @@ thread_tick(void) {
         kernel_ticks++;
 
     if (thread_mlfqs) {
-        thread_current()->recent_cpu =
-                add(thread_current()->recent_cpu,int_to_real(1));
-        if(timer_ticks()%TIMER_FREQ ==0){
-            printf("entered\n");
+        if (timer_ticks() % TIMER_FREQ == 0) {
+//            printf("entered\n");
             calculate_load_average();
-            update_recent_cpu();
-            seconds++;
+          //  seconds++;
+            struct list_elem *max = list_begin(&all_list);
+
+            struct list_elem *e;
+
+            for (e = list_next(max); e != list_end(&all_list); e = list_next(e)) {
+                struct thread *t = list_entry(e, struct thread, allelem);
+                update_recent_cpu(t);
+                t->priority = calculate_priority(t);
+            }
+        } else {
+            thread_current()->recent_cpu =
+                    add(thread_current()->recent_cpu, int_to_real(1));
+
+            thread_set_priority(calculate_priority(thread_current()));
         }
-        thread_set_priority(calculate_priority());
     }
+
     /* Enforce preemption. */
+
     if (++thread_ticks >= TIME_SLICE || yield_get()) {
 
 
@@ -345,6 +356,10 @@ thread_exit(void) {
    may be scheduled again immediately at the scheduler's whim. */
 void
 thread_yield(void) {
+    if (intr_context()) {
+        intr_yield_on_return();
+        return;
+    }
     struct thread *cur = thread_current();
     enum intr_level old_level;
 
@@ -377,8 +392,10 @@ thread_foreach(thread_action_func *func, void *aux) {
 void
 thread_set_priority(int new_priority) {
     thread_current()->default_priority = new_priority;
-    //thread_current()->priority = new_priority; // TODO to change this
-    if (list_empty(&thread_current()->donors)) {
+    if (thread_mlfqs) {
+        thread_current()->priority = new_priority;
+
+    } else if (list_empty(&thread_current()->donors)) {
         thread_current()->priority = thread_current()->default_priority;
     } else {
         struct lock *max_pr = list_entry(list_max(&thread_current()->donors, lock_max_func, NULL),
@@ -394,13 +411,9 @@ thread_set_priority(int new_priority) {
     enum intr_level old_level = intr_disable();
     if (coming != NULL && coming->priority > new_priority) {
 
-//        thread_current()->status = THREAD_READY;
-//
-//        schedule();
-
         intr_set_level(old_level);
+
         thread_yield();
-        //yield_set(true);
     }
     intr_set_level(old_level);
 }
@@ -416,7 +429,7 @@ void
 thread_set_nice(int nice) {
     thread_current()->nice = nice;
 
-    thread_set_priority(calculate_priority());
+    thread_set_priority(calculate_priority(thread_current()));
 
 }
 
@@ -431,6 +444,9 @@ thread_get_nice(void) {
 int
 thread_get_load_avg(void) {
     // printf("%d load_average\n",load_average);
+    if (load_average == 0) {
+        calculate_load_average();
+    }
     return real_to_int(load_average * 100);
 }
 
@@ -576,7 +592,7 @@ thread_schedule_tail(struct thread *prev) {
     cur->status = THREAD_RUNNING;
     /* Start new time slice. */
     thread_ticks = 0;
-    seconds=0;
+    seconds = 0;
 #ifdef USERPROG
     /* Activate the new address space. */
     process_activate ();
@@ -609,7 +625,6 @@ schedule(void) {
     ASSERT (intr_get_level() == INTR_OFF);
     ASSERT (cur->status != THREAD_RUNNING);
     ASSERT (is_thread(next));
-//    yield_set(false);
     if (cur != next)
         prev = switch_threads(cur, next);
     thread_schedule_tail(prev);
@@ -678,11 +693,8 @@ void thread_block_time(int64_t wake_up_tick) {
     data->wake_up_ticks = (int64_t) start + wake_up_tick;
     list_insert_ordered(&sleeping_list, &data->elem, tick_less_than, NULL);
     enum intr_level old_level = intr_disable();
-//    printf("before thread block\n");
-
     thread_block();
     intr_set_level(old_level);
-    // printf("passed thread block\n");
 }
 
 void wake_up_threads() {
@@ -695,42 +707,33 @@ void wake_up_threads() {
         }
 
         list_pop_front(&sleeping_list);
-
         thread_unblock(data->blocked_thread);
-
     }
-
 }
 
-int calculate_priority() {
-
-
-
-    real rcpu = divide(thread_current()->recent_cpu, int_to_real(4));
-//    printf("%d recpu\n",rcpu);
-    real nic2 = multiply(int_to_real(thread_get_nice()), int_to_real(2));
-//    printf("%d nice\n",nic2);
-
+int calculate_priority(struct thread *t) {
+    real rcpu = divide(t->recent_cpu, int_to_real(4));
+    real nic2 = multiply(int_to_real(t->nice), int_to_real(2));
     return PRI_MAX - real_to_int(add(rcpu, nic2));
 }
 
-void update_recent_cpu() {
-    real fact = divide(2 * load_average, add(2 * load_average, int_to_real(1)));
-    thread_current()->recent_cpu = multiply(thread_current()->recent_cpu, fact);
-    thread_current()->recent_cpu = add(thread_current()->recent_cpu,
-                                       int_to_real(thread_get_nice()));
+void update_recent_cpu(struct thread *t) {
 
+    real fact = multiply(load_average, int_to_real(2));
+    fact = divide(fact, add(fact, int_to_real(1)));
+    real temp = multiply(t->recent_cpu, fact);
+    t->recent_cpu = add(temp,int_to_real(t->nice));
 
 }
 
 void calculate_load_average() {
 
     real first_operand = multiply(divide(int_to_real(59), int_to_real(60)), load_average);
-    int ready_threads_num = (int) (list_size(&ready_list) + 1);
+    int64_t ready_threads_num = (int64_t) (list_size(&ready_list) + (thread_current() != idle_thread));
     real second_operand = divide(int_to_real(ready_threads_num), int_to_real(60));
-
-    printf("%d    %d in load average\n",int_to_real(60),second_operand);
+//    printf("%d %d %d %d \n",ready_threads_num,divide(int_to_real(59), int_to_real(60)),load_average,first_operand);
     load_average = add(first_operand, second_operand);
+    //printf("%d  %d    %d in load average\n",ready_threads_num,load_average,second_operand);
 
 }
 

@@ -7,7 +7,7 @@
    The expected output is listed below.  Some margin of error is
    allowed.
 
-   If your implementation fails this test but passes most other
+   If your implementat  ion fails this test but passes most other
    tests, then consider whether you are doing too much work in
    the timer interrupt.  If the timer interrupt handler takes too
    long, then the test's main thread will not have enough time to

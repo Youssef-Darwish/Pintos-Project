@@ -175,9 +175,9 @@ bool priority_greater_than(const struct list_elem *,        /* helper function t
                            const struct list_elem *,        /*threads in ready list by priority*/
                            void *);
 
-int calculate_priority();
+int calculate_priority(struct thread *);
 
-void update_recent_cpu();
+void update_recent_cpu(struct thread *);
 
 void calculate_load_average();
 
