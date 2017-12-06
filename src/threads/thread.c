@@ -153,6 +153,8 @@ thread_tick(void) {
     if (thread_mlfqs) {
         if (timer_ticks() % TIMER_FREQ == 0) {
 //            printf("entered\n");
+            update_recent_cpu(thread_current());
+
             calculate_load_average();
           //  seconds++;
             struct list_elem *max = list_begin(&all_list);
@@ -161,7 +163,10 @@ thread_tick(void) {
 
             for (e = list_next(max); e != list_end(&all_list); e = list_next(e)) {
                 struct thread *t = list_entry(e, struct thread, allelem);
-                update_recent_cpu(t);
+                if(t==idle_thread)
+                    continue;
+                if(t!=thread_current())
+                    update_recent_cpu(t);
                 t->priority = calculate_priority(t);
             }
         } else {
@@ -535,6 +540,10 @@ init_thread(struct thread *t, const char *name, int priority) {
     strlcpy(t->name, name, sizeof t->name);
     t->stack = (uint8_t *) t + PGSIZE;
     t->priority = t->default_priority = priority;
+    if(t == running_thread())
+        t->recent_cpu = 0;
+    else
+        t->recent_cpu = thread_current()->recent_cpu;
     t->blocking_lock = NULL;
     t->magic = THREAD_MAGIC;
     list_init(&t->donors);
@@ -718,7 +727,7 @@ int calculate_priority(struct thread *t) {
 }
 
 void update_recent_cpu(struct thread *t) {
-
+    //printf("%s %d %d %d sets of shit\n",t->name,thread_current()==t,t->recent_cpu,load_average );
     real fact = multiply(load_average, int_to_real(2));
     fact = divide(fact, add(fact, int_to_real(1)));
     real temp = multiply(t->recent_cpu, fact);

@@ -194,7 +194,7 @@ lock_acquire(struct lock *lock) {
     enum intr_level old_level = intr_disable();
     if (sema_try_down(&lock->semaphore)) {
         lock->holder = thread_current();
-        list_push_front(&thread_current()->donors,&lock->elem);
+        list_push_back(&thread_current()->donors,&lock->elem);
         if(thread_current()->priority > lock->priority) {
             lock->priority = thread_current()->priority;
             priority_donate(lock);
@@ -211,9 +211,16 @@ lock_acquire(struct lock *lock) {
     }
     intr_set_level(old_level);
     sema_down(&lock->semaphore);
-    list_push_front(&thread_current()->donors,&lock->elem);
-    thread_current()->blocking_lock = NULL;
+    old_level = intr_disable();
     lock->holder = thread_current();
+    if(thread_current()->priority > lock->priority) {
+        lock->priority = thread_current()->priority;
+        priority_donate(lock);
+//        printf("%s %s names:\n",thread_current()->name,lock->holder->name);
+    }
+    list_push_back(&thread_current()->donors,&lock->elem);
+    thread_current()->blocking_lock = NULL;
+    intr_set_level(old_level);
 }
 
 /*Donate priority to lock
@@ -281,20 +288,26 @@ void
 lock_release(struct lock *lock) {
     ASSERT (lock != NULL);
     ASSERT (lock_held_by_current_thread(lock));
-
+    //enum intr_level old = intr_disable();
     lock->holder = NULL;
     list_remove(&lock->elem);
     if(list_empty(&thread_current()->donors)) {
+       //ASSERT(0);
      thread_current()->priority = thread_current()->default_priority;
     }
     else {
-        struct lock *max_pr = list_entry(list_max(&thread_current()->donors, lock_max_func, NULL),
+        struct lock *max_pr = list_entry(list_min(&thread_current()->donors, lock_max_func, NULL),
                                          struct lock, elem);
 
+
         thread_current()->priority = (max_pr->priority);
-        if(thread_current()->default_priority > thread_current()->priority)
+        if(thread_current()->default_priority > thread_current()->priority) {
+           // printf("NOOOO2\n");
+
             thread_current()->priority = thread_current()->default_priority;
+        }
     }
+    //intr_set_level(old);
     lock->priority = PRI_MIN;
     sema_up(&lock->semaphore);
 }
