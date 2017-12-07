@@ -156,16 +156,16 @@ thread_tick(void) {
             update_recent_cpu(thread_current());
 
             calculate_load_average();
-          //  seconds++;
+            //  seconds++;
             struct list_elem *max = list_begin(&all_list);
 
             struct list_elem *e;
 
             for (e = list_next(max); e != list_end(&all_list); e = list_next(e)) {
                 struct thread *t = list_entry(e, struct thread, allelem);
-                if(t==idle_thread)
+                if (t == idle_thread)
                     continue;
-                if(t!=thread_current())
+                if (t != thread_current())
                     update_recent_cpu(t);
                 t->priority = calculate_priority(t);
             }
@@ -540,7 +540,7 @@ init_thread(struct thread *t, const char *name, int priority) {
     strlcpy(t->name, name, sizeof t->name);
     t->stack = (uint8_t *) t + PGSIZE;
     t->priority = t->default_priority = priority;
-    if(t == running_thread())
+    if (t == running_thread())
         t->recent_cpu = 0;
     else
         t->recent_cpu = thread_current()->recent_cpu;
@@ -731,7 +731,7 @@ void update_recent_cpu(struct thread *t) {
     real fact = multiply(load_average, int_to_real(2));
     fact = divide(fact, add(fact, int_to_real(1)));
     real temp = multiply(t->recent_cpu, fact);
-    t->recent_cpu = add(temp,int_to_real(t->nice));
+    t->recent_cpu = add(temp, int_to_real(t->nice));
 
 }
 
