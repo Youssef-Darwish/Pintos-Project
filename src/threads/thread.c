@@ -104,7 +104,6 @@ static tid_t allocate_tid(void);
 void
 thread_init(void) {
     ASSERT (intr_get_level() == INTR_OFF);
-//    printf("entered\n\n");
     lock_init(&tid_lock);
     list_init(&ready_list);
     list_init(&all_list);
@@ -152,13 +151,9 @@ thread_tick(void) {
 
     if (thread_mlfqs) {
         if (timer_ticks() % TIMER_FREQ == 0) {
-//            printf("entered\n");
             update_recent_cpu(thread_current());
-
             calculate_load_average();
-            //  seconds++;
             struct list_elem *max = list_begin(&all_list);
-
             struct list_elem *e;
 
             for (e = list_next(max); e != list_end(&all_list); e = list_next(e)) {
@@ -172,7 +167,6 @@ thread_tick(void) {
         } else {
             thread_current()->recent_cpu =
                     add(thread_current()->recent_cpu, int_to_real(1));
-
             thread_set_priority(calculate_priority(thread_current()));
         }
     }
@@ -180,8 +174,6 @@ thread_tick(void) {
     /* Enforce preemption. */
 
     if (++thread_ticks >= TIME_SLICE || yield_get()) {
-
-
         intr_yield_on_return();
     }
 
@@ -247,17 +239,12 @@ thread_create(const char *name, int priority,
     sf = alloc_frame(t, sizeof *sf);
     sf->eip = switch_entry;
     sf->ebp = 0;
-
     intr_set_level(old_level);
-
     if (t->priority > thread_current()->priority) {
-        //printf("higher priority when created\n");
-        // printf("%d %d \n",t->priority,thread_current()->priority);
+
         list_insert_ordered(&ready_list, &(t->elem), priority_greater_than, NULL);
         thread_yield();
     }
-
-
         /* Add to run queue. */
     else
         thread_unblock(t);
@@ -448,7 +435,6 @@ thread_get_nice(void) {
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg(void) {
-    // printf("%d load_average\n",load_average);
     if (load_average == 0) {
         calculate_load_average();
     }
@@ -727,7 +713,6 @@ int calculate_priority(struct thread *t) {
 }
 
 void update_recent_cpu(struct thread *t) {
-    //printf("%s %d %d %d sets of shit\n",t->name,thread_current()==t,t->recent_cpu,load_average );
     real fact = multiply(load_average, int_to_real(2));
     fact = divide(fact, add(fact, int_to_real(1)));
     real temp = multiply(t->recent_cpu, fact);
@@ -740,9 +725,7 @@ void calculate_load_average() {
     real first_operand = multiply(divide(int_to_real(59), int_to_real(60)), load_average);
     int64_t ready_threads_num = (int64_t) (list_size(&ready_list) + (thread_current() != idle_thread));
     real second_operand = divide(int_to_real(ready_threads_num), int_to_real(60));
-//    printf("%d %d %d %d \n",ready_threads_num,divide(int_to_real(59), int_to_real(60)),load_average,first_operand);
     load_average = add(first_operand, second_operand);
-    //printf("%d  %d    %d in load average\n",ready_threads_num,load_average,second_operand);
 
 }
 

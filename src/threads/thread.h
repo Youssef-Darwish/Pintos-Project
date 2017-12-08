@@ -97,7 +97,7 @@ struct thread {
     int default_priority;
     struct list donors;
     struct list_elem allelem;           /* List element for all threads list. */
-    struct lock *blocking_lock;        /* lock blocking thread
+    struct lock *blocking_lock;         /* lock blocking thread*/
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     struct list_elem waiting_elem;
