@@ -103,6 +103,9 @@ struct thread {
     struct list_elem waiting_elem;
     real recent_cpu;
     int nice;
+    int exit_status;
+    struct list children;
+    struct list_elem child_elem;
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */

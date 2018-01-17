@@ -17,7 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
+#include "threads/synch.h"
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -41,7 +41,8 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
+
   return tid;
 }
 
@@ -86,8 +87,26 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid )
 {
+//    while(true){
+//
+//    }
+    struct thread* curr = thread_current();
+    struct thread* cur_child;
+
+    struct list_elem *e;
+    bool is_child = false;
+    for (e = list_begin(&curr->children); e != list_end(&curr->donors) && (!is_child); e = list_next(e)) {
+        cur_child = list_entry(e, struct thread, child_elem);
+        is_child|=(cur_child->tid == child_tid);
+    }
+    if(!is_child)
+        return  -1;
+    if(cur_child->status == THREAD_DYING)
+        return cur_child->exit_status;
+    thread_block();
+
   return -1;
 }
 
@@ -222,6 +241,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+    //-----------------------
+    // argument must be parsed before opening filesys
   file = filesys_open (file_name);
   if (file == NULL) 
     {
@@ -430,6 +451,7 @@ static bool
 setup_stack (void **esp) 
 {
   uint8_t *kpage;
+
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
@@ -437,7 +459,11 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        *esp = PHYS_BASE -12;   // temporary changed till parsing arguments
+                                // start here adding arguments to stack & keep track of their
+                                // addresses : starting from right to left
+                                //then add fake return
+
       else
         palloc_free_page (kpage);
     }
