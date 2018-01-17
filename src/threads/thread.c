@@ -78,7 +78,7 @@ static struct thread *next_thread_to_run(void);
 
 static void init_thread(struct thread *, const char *name, int priority);
 
-static bool is_thread(struct thread *) UNUSED;
+static bool is_thread(struct thread *) ;
 
 static void *alloc_frame(struct thread *, size_t size);
 
@@ -548,6 +548,20 @@ alloc_frame(struct thread *t, size_t size) {
 
     t->stack -= size;
     return t->stack;
+}
+
+struct  thread * get_thread(tid_t id){
+    struct thread *parent;
+    struct list_elem *e;
+    bool is_parent = false;
+    for (e = list_begin(&all_list); e != list_end(&all_list) && (!is_parent); e = list_next(e)) {
+        parent = list_entry(e, struct thread, allelem);
+        is_parent|=(parent->tid == id);
+
+    }
+    if(is_parent)
+        return parent;
+    return  NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

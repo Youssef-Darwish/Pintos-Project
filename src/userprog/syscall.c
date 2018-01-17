@@ -6,6 +6,7 @@
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
 #include "string.h"
+#include "process.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -20,10 +21,10 @@ syscall_handler (struct intr_frame *f )
 {
   printf ("system call!\n");
     int * esp = f->esp;
-//    switch (* esp){
-//        case SYS_HALT :
-//            halt(f);
-//            break;
+    switch (* esp){
+        case SYS_HALT :
+            halt(f);
+            break;
 //        case SYS_FILESIZE:
 //            file_size(f);
 //            break;
@@ -33,8 +34,8 @@ syscall_handler (struct intr_frame *f )
 //        case SYS_CREATE:
 //            create();
 //            break;
-//        case SYS_WAIT:
-//            wait();
+        case SYS_WAIT:
+            wait(0);
 //            break;
 //        case SYS_EXEC:
 //            exec();
@@ -60,10 +61,10 @@ syscall_handler (struct intr_frame *f )
 //        case SYS_EXIT:
 //            exit(f);
 //            break;
-//        default:
+        default:
             //print error message unsupported syscall
-        //    break;
-//    }
+            break;
+    }
 
   thread_exit ();
 }
@@ -106,7 +107,32 @@ void exit ( struct intr_frame *f) {
         }
 
     }
+    tid_t parent_id = curr->parent_id;
+
+    struct thread *parent;
+    if((parent=get_thread(parent_id)) != NULL  ){
+        //consider sync
+        bool found = false;
+        struct child * me=NULL;
+        struct  list_elem *e=NULL;
+        for (e = list_begin(&parent->children); e != list_end(&parent->children) && (!found); e = list_next(e)) {
+            me = list_entry(e, struct child, elem);
+            found|=(me->tid == curr->tid);
+
+        }
+        if(me !=NULL && me->tid==curr->tid) {
+            me->exit_status = exit_status;
+            me->state = 0;
+            if(me->halting)
+            {
+                me->halting = false;
+                thread_unblock(parent);
+            }
+        }
+    }
+
     f->eax = exit_status;
+    process_exit();
     thread_exit();
 }
 
@@ -122,6 +148,6 @@ void wait(struct intr_frame *f) {
 //        //exit w error
 //    }
 
-
+    f->eax =(uint32_t )process_wait(child_pid);
 
 }

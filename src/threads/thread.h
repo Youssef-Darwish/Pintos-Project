@@ -103,9 +103,8 @@ struct thread {
     struct list_elem waiting_elem;
     real recent_cpu;
     int nice;
-    int exit_status;
     struct list children;
-    struct list_elem child_elem;
+    tid_t parent_id;
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -121,7 +120,14 @@ struct sleeping_thread_data {
     struct list_elem elem;
 };
 
+struct child {
+    bool halting;
+    int32_t exit_status;
+    tid_t tid;
+    int state;
+    struct  list_elem elem;
 
+};
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -183,5 +189,6 @@ int calculate_priority(struct thread *);
 void update_recent_cpu(struct thread *);
 
 void calculate_load_average();
+struct  thread * get_thread(tid_t id);
 
 #endif /* threads/thread.h */

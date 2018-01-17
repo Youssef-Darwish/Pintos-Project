@@ -89,23 +89,28 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid )
 {
-//    while(true){
-//
-//    }
+
     struct thread* curr = thread_current();
     struct thread* cur_child;
+    struct child* target;
 
     struct list_elem *e;
     bool is_child = false;
-    for (e = list_begin(&curr->children); e != list_end(&curr->donors) && (!is_child); e = list_next(e)) {
-        cur_child = list_entry(e, struct thread, child_elem);
-        is_child|=(cur_child->tid == child_tid);
+    for (e = list_begin(&curr->children); e != list_end(&curr->children) && (!is_child); e = list_next(e)) {
+        target = list_entry(e, struct child, elem);
+        is_child|=(target->tid == child_tid);
     }
+
     if(!is_child)
         return  -1;
-    if(cur_child->status == THREAD_DYING)
-        return cur_child->exit_status;
-    thread_block();
+    if(target->state == 1) {
+        //consider sync
+        target->halting = true;
+        thread_block();
+    }
+    if(target->state == 0) {
+        return target->exit_status;
+    }
 
   return -1;
 }
@@ -133,6 +138,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
 }
 
 /* Sets up the CPU for running user code in the current
