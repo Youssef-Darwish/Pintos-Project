@@ -19,8 +19,10 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "user/syscall.h"
 
 static thread_func start_process NO_RETURN;
+static struct lock crea;
 
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
 
@@ -33,6 +35,7 @@ process_execute(const char *file_name) {
     char *fn_copy;
     char *file_name_copy;
     tid_t tid;
+    lock_init(&crea);
 
     /* Make a copy of FILE_NAME.
        Otherwise there's a race between the caller and load(). */
@@ -51,12 +54,17 @@ process_execute(const char *file_name) {
     file_name_copy = strtok_r(file_name_copy, " ", &ptr);
 
     //file_name_copy --> thread name
+    lock_acquire(&crea);
     tid = thread_create(file_name_copy, PRI_DEFAULT, start_process, fn_copy);
     if (tid == TID_ERROR)
         palloc_free_page(fn_copy);
-
-    free(ptr);
-    //free(file_name_copy);
+    struct child *tc = malloc(sizeof(struct child));
+    tc->tid = tid;
+    tc->exit_status = -1;
+    tc->state = 1;
+    tc->halting = 0;
+    list_push_back(&thread_current()->children, &tc->elem);
+    lock_release(&crea);
     return tid;
 }
 
@@ -64,6 +72,8 @@ process_execute(const char *file_name) {
    running. */
 static void
 start_process(void *file_name_) {
+    lock_acquire(&crea);
+    lock_release(&crea);
     char *file_name = file_name_;
     struct intr_frame if_;
     bool success;
@@ -74,7 +84,6 @@ start_process(void *file_name_) {
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
-
     /* If load failed, quit. */
     palloc_free_page(file_name);
     if (!success)
@@ -102,10 +111,17 @@ start_process(void *file_name_) {
 int
 process_wait(tid_t child_tid) {
 
+    //return child_tid;
+    //while (true) {
+
+    //}
+
+    //thread_block_time(00);
+    //return 0;
     struct thread *curr = thread_current();
     struct thread *cur_child;
     struct child *target;
-
+    struct thread *waitfor = get_thread(child_tid);
     struct list_elem *e;
     bool is_child = false;
     for (e = list_begin(&curr->children); e != list_end(&curr->children) && (!is_child); e = list_next(e)) {
@@ -115,11 +131,15 @@ process_wait(tid_t child_tid) {
 
     if (!is_child)
         return -1;
-    if (target->state == 1) {
+
+    while (target->state == 1) {
         //consider sync
+        // printf("wasalt %d\n",target->exit_status);
         target->halting = true;
-        thread_block();
+        //waitfor = get_thread(child_tid);
+        //thread_block();
     }
+
     if (target->state == 0) {
         return target->exit_status;
     }
@@ -127,12 +147,84 @@ process_wait(tid_t child_tid) {
     return -1;
 }
 
+void exit_with(int exit_status) {
+    // printf("dye\n");
+
+    struct thread *curr = thread_current();
+    struct lock *element_lock;//= list_entry(&curr->waiting_elem,struct lock,elem);
+    struct list_elem *it = list_begin(&curr->donors);
+    if (it != list_end(&curr->donors)) {
+        struct list_elem *e;
+
+        for (e = list_next(it); e != list_end(&curr->donors); e = list_next(e)) {
+            element_lock = list_entry(e, struct lock, elem);
+            lock_release(&element_lock);
+
+        }
+
+    }
+    struct file_resource *fil_elem;
+    it = list_begin(&curr->files);
+    if (it != list_end(&curr->files)) {
+        struct list_elem *e;
+
+        for (e = list_next(it); e != list_end(&curr->files); e = list_next(e)) {
+            fil_elem = list_entry(e, struct file_resource, elem);
+            file_close(fil_elem->res);
+            list_remove(&fil_elem->elem);
+
+        }
+
+    }
+
+    tid_t parent_id = curr->parent_id;
+
+    struct thread *parent = get_thread(parent_id);
+    if ((parent) != NULL) {
+        //consider sync
+
+        bool found = false;
+        struct child *me = NULL;
+        struct list_elem *e = NULL;
+        for (e = list_begin(&parent->children); e != list_end(&parent->children) && (!found); e = list_next(e)) {
+            me = list_entry(e, struct child, elem);
+            found |= (me->tid == curr->tid);
+
+        }
+        if (me != NULL && me->tid == curr->tid) {
+
+            me->exit_status = exit_status;
+
+            me->state = 0;
+
+            if (me->halting) {
+                me->halting = false;
+
+                //   thread_unblock(parent);
+            }
+        }
+    }
+
+}
+
+void process_exit_with_status(int status) {
+    if (thread_tid() == 1) {
+        return;
+    }
+    thread_current()->exit_status = status;
+    printf("%s: exit(%d)\n", thread_name(), status);
+    process_exit();
+
+}
+
 /* Free the current process's resources. */
 void
 process_exit(void) {
+    if (thread_tid() == 1) {
+        return;
+    }
     struct thread *cur = thread_current();
     uint32_t *pd;
-
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
     pd = cur->pagedir;
@@ -148,6 +240,8 @@ process_exit(void) {
         pagedir_activate(NULL);
         pagedir_destroy(pd);
     }
+
+    exit_with(thread_current()->exit_status);
 
 }
 
@@ -332,8 +426,11 @@ load(const char *file_name, void (**eip)(void), void **esp) {
     }
 
     /* Set up stack. */
-    if (!setup_stack(esp, file_name_copy))
+    if (!setup_stack(esp, file_name)) {
         goto done;
+    }
+
+
 
     /* Start address. */
     *eip = (void (*)(void)) ehdr.e_entry;
@@ -466,43 +563,54 @@ setup_stack(void **esp, char *file_name) {
             // addresses : starting from right to left
             //then add fake return
 
-        else
+        else {
             palloc_free_page(kpage);
-    }
 
+        }
+    }
+    *esp = PHYS_BASE;
     char *slice, *ptr;
     int argc = 0;
     char **argv = malloc(256); // check the size?
     int i;
 
-    char *copy = malloc(strlen(file_name) + 1);
-    strlcpy(copy, file_name, strlen(file_name) + 1);
-
-    for (slice = strtok_r(copy, " ", &ptr); slice != NULL;
-         slice = strtok_r(NULL, " ", &ptr)) {
-        argv[argc] = slice;
+    for (slice = strtok_r(file_name, " ", &file_name); slice != NULL;
+         slice = strtok_r(file_name, " ", &file_name)) {
+        argv[argc] = malloc(strlen(slice) + 1);
+        memcpy(argv[argc], slice, strlen(slice) + 1);
         argc++;
     }
-
+    int zero = 0;
     int addresses[argc];
 
-    // sth wrong in logic? :/
     for (i = argc - 1; i >= 0; i--) {
-
+//
         *esp -= strlen(argv[i]) + 1;
-        argv[i] = *esp;
+        memcpy(*esp, argv[i], strlen(argv[i]) + 1);
         addresses[i] = (int) *esp;
-
     }
 
+    while ((int) *esp % 4 != 0) {
+        *esp -= sizeof(char);
+        char x = 0;
+        memcpy(*esp, &x, sizeof(char));
+    }
+    *esp -= sizeof(char *);
+    memcpy(*esp, &zero, sizeof(char *));
     for (i = argc - 1; i >= 0; i--) {
-
-        *esp -= strlen(addresses[i]);
-        //**esp = argv[i];
-
+        *esp -= sizeof(int);
+        memcpy(*esp, &addresses[i], sizeof(int));
     }
 
-    free(argv);
+    //hex_dump((uintptr_t) *esp, *esp, sizeof(char) * 30, true);
+
+    int pt = *esp;
+    *esp -= sizeof(int);
+    memcpy(*esp, &pt, sizeof(int));
+    *esp -= sizeof(int);
+    memcpy(*esp, &argc, sizeof(int));
+    *esp -= sizeof(int);
+    memcpy(*esp, &zero, sizeof(int));
     return success;
 }
 

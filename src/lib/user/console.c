@@ -40,7 +40,8 @@ puts (const char *s)
 int
 putchar (int c) 
 {
-  char c2 = c;
+
+    char c2 = c;
   write (STDOUT_FILENO, &c2, 1);
   return c;
 }
@@ -88,6 +89,7 @@ add_char (char c, void *aux_)
 static void
 flush (struct vhprintf_aux *aux)
 {
+
   if (aux->p > aux->buf)
     write (aux->handle, aux->buf, aux->p - aux->buf);
   aux->p = aux->buf;

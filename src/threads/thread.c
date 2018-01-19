@@ -78,7 +78,7 @@ static struct thread *next_thread_to_run(void);
 
 static void init_thread(struct thread *, const char *name, int priority);
 
-static bool is_thread(struct thread *) ;
+static bool is_thread(struct thread *);
 
 static void *alloc_frame(struct thread *, size_t size);
 
@@ -221,6 +221,8 @@ thread_create(const char *name, int priority,
     /* Initialize thread. */
     init_thread(t, name, priority);
     tid = t->tid = allocate_tid();
+
+    t->parent_id = thread_current()->tid;
     /* Prepare thread for first run by initializing its stack.
        Do this atomically so intermediate values for the 'stack'
        member cannot be observed. */
@@ -532,9 +534,14 @@ init_thread(struct thread *t, const char *name, int priority) {
         t->recent_cpu = thread_current()->recent_cpu;
     t->blocking_lock = NULL;
     t->magic = THREAD_MAGIC;
+    t->exit_status = 0;
     list_init(&t->donors);
     list_push_back(&all_list, &t->allelem);
     list_init(&t->children);
+    list_init(&t->files);
+    t->fir_fid = 2;
+   // struct  child *tc = malloc(sizeof(struct child));
+    //thread_current();
 
 }
 
@@ -550,18 +557,21 @@ alloc_frame(struct thread *t, size_t size) {
     return t->stack;
 }
 
-struct  thread * get_thread(tid_t id){
+struct thread *get_thread(tid_t id) {
     struct thread *parent;
     struct list_elem *e;
     bool is_parent = false;
+
     for (e = list_begin(&all_list); e != list_end(&all_list) && (!is_parent); e = list_next(e)) {
         parent = list_entry(e, struct thread, allelem);
-        is_parent|=(parent->tid == id);
-
+        is_parent |= (parent->tid == id);
     }
-    if(is_parent)
+
+    if(!is_parent)
+    printf("%d nononnono\n",is_parent);
+    if (is_parent)
         return parent;
-    return  NULL;
+    return NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -744,4 +754,3 @@ void calculate_load_average() {
     load_average = add(first_operand, second_operand);
 
 }
-

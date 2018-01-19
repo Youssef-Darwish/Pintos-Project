@@ -98,9 +98,12 @@ struct thread {
     struct list donors;
     struct list_elem allelem;           /* List element for all threads list. */
     struct lock *blocking_lock;         /* lock blocking thread*/
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     struct list_elem waiting_elem;
+    struct list files;
+    int fir_fid;
     real recent_cpu;
     int nice;
     struct list children;
@@ -108,6 +111,7 @@ struct thread {
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    int exit_status;
 #endif
 
     /* Owned by thread.c. */
@@ -119,7 +123,9 @@ struct sleeping_thread_data {
     struct thread *blocked_thread;
     struct list_elem elem;
 };
-
+/*
+ * struct that holds spawned thread
+ */
 struct child {
     bool halting;
     int32_t exit_status;
@@ -127,6 +133,13 @@ struct child {
     int state;
     struct  list_elem elem;
 
+};
+
+struct file_resource {
+    struct file* res;
+    int fd;
+    int index;
+    struct  list_elem elem;
 };
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
