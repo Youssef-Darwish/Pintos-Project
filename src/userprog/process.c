@@ -23,7 +23,9 @@
 
 static thread_func start_process NO_RETURN;
 static struct lock crea;
-
+static struct semaphore on_load;
+static struct semaphore on_die;
+static bool load_success;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
 
 /* Starts a new thread running a user program loaded from
@@ -36,7 +38,9 @@ process_execute(const char *file_name) {
     char *file_name_copy;
     tid_t tid;
     lock_init(&crea);
-
+    sema_init(&on_load,0);
+    load_success = false;
+    sema_init(&on_die,0);
     /* Make a copy of FILE_NAME.
        Otherwise there's a race between the caller and load(). */
     fn_copy = palloc_get_page(0);
@@ -65,7 +69,13 @@ process_execute(const char *file_name) {
     tc->halting = 0;
     list_push_back(&thread_current()->children, &tc->elem);
     lock_release(&crea);
-    return tid;
+    sema_down(&on_load);
+    if(load_success == true){
+        sema_up(&on_die);
+        return tid;
+    }
+    sema_up(&on_die);
+    return -1;
 }
 
 /* A thread function that loads a user process and starts it
@@ -86,8 +96,15 @@ start_process(void *file_name_) {
     success = load(file_name, &if_.eip, &if_.esp);
     /* If load failed, quit. */
     palloc_free_page(file_name);
-    if (!success)
+    load_success = success;
+    sema_up(&on_load);
+
+    if (!success){
+   //     sema_down(&thread_current()->on_die);
+        sema_up(&on_die);
         thread_exit();
+    }
+
 
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
@@ -119,9 +136,7 @@ process_wait(tid_t child_tid) {
     //thread_block_time(00);
     //return 0;
     struct thread *curr = thread_current();
-    struct thread *cur_child;
     struct child *target;
-    struct thread *waitfor = get_thread(child_tid);
     struct list_elem *e;
     bool is_child = false;
     for (e = list_begin(&curr->children); e != list_end(&curr->children) && (!is_child); e = list_next(e)) {
@@ -182,7 +197,6 @@ void exit_with(int exit_status) {
     struct thread *parent = get_thread(parent_id);
     if ((parent) != NULL) {
         //consider sync
-
         bool found = false;
         struct child *me = NULL;
         struct list_elem *e = NULL;
@@ -203,6 +217,7 @@ void exit_with(int exit_status) {
                 //   thread_unblock(parent);
             }
         }
+
     }
 
 }
@@ -212,8 +227,8 @@ void process_exit_with_status(int status) {
         return;
     }
     thread_current()->exit_status = status;
+   // process_exit();
     printf("%s: exit(%d)\n", thread_name(), status);
-    process_exit();
 
 }
 

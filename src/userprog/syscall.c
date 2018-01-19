@@ -48,8 +48,7 @@ syscall_handler(struct intr_frame *f) {
             wait(f);
             break;
         case SYS_EXEC:
-            // exec();
-            printf("exec\n");
+             exec(f);
             break;
         case SYS_REMOVE:
             remove(f);
@@ -81,7 +80,15 @@ syscall_handler(struct intr_frame *f) {
     // thread_exit();
 }
 
+void exec(struct intr_frame *f) {
+    int *esp = f->esp;
+    esp=check_addr(esp+1);
+    int *arg = *esp;
+    arg = check_addr(arg);
+    int pid = process_execute(arg);
+    f->eax = pid;
 
+}
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
@@ -132,6 +139,7 @@ void exit(struct intr_frame *f) {
 
     f->eax = exit_status;
     process_exit_with_status(exit_status);
+    thread_exit();
 }
 
 void seek(struct intr_frame *f) {

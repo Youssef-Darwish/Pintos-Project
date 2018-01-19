@@ -339,6 +339,13 @@ thread_exit(void) {
     /* Remove thread from all threads list, set our status to dying,
        and schedule another process.  That process will destroy us
        when it calls thread_schedule_tail(). */
+//    struct list_elem *e;
+//    struct thread *me;
+//    bool found = false;
+//    for (e = list_begin(&all_list); e != list_end(&all_list) && (!found); e = list_next(e)) {
+//        me = list_entry(e, struct thread, allelem);
+//        printf("%s mawgod \n",me->name);
+//    }
     intr_disable();
     list_remove(&thread_current()->allelem);
     thread_current()->status = THREAD_DYING;
@@ -535,6 +542,7 @@ init_thread(struct thread *t, const char *name, int priority) {
     t->blocking_lock = NULL;
     t->magic = THREAD_MAGIC;
     t->exit_status = 0;
+
     list_init(&t->donors);
     list_push_back(&all_list, &t->allelem);
     list_init(&t->children);
@@ -567,8 +575,8 @@ struct thread *get_thread(tid_t id) {
         is_parent |= (parent->tid == id);
     }
 
-    if(!is_parent)
-    printf("%d nononnono\n",is_parent);
+//    if(!is_parent)
+//    printf("%d nononnono\n",is_parent);
     if (is_parent)
         return parent;
     return NULL;
