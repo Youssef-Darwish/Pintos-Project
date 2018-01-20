@@ -38,7 +38,7 @@ syscall_handler(struct intr_frame *f) {
             wait(f);
             return;
         case SYS_EXEC:
-            exec(f);
+            execute(f);
             return;
         case SYS_HALT :
             halt(f);
@@ -91,7 +91,7 @@ syscall_handler(struct intr_frame *f) {
     // thread_exit();
 }
 
-void exec(struct intr_frame *f) {
+void execute(struct intr_frame *f) {
     int *esp = f->esp;
     esp=check_addr(esp+1);
     int *arg = *esp;
@@ -152,6 +152,7 @@ void exit(struct intr_frame *f) {
     f->eax = exit_status;
     process_exit_with_status(exit_status);
     thread_exit();
+
 }
 
 void seek(struct intr_frame *f) {

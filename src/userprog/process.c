@@ -86,7 +86,6 @@ process_execute(const char *file_name) {
    running. */
 static void
 start_process(void *file_name_) {
-    //lock_acquire(&test);
     lock_acquire(&crea);
     lock_release(&crea);
     char *file_name = file_name_;
@@ -99,10 +98,10 @@ start_process(void *file_name_) {
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
-    /* If load failed, quit. */
-    palloc_free_page(file_name);
     load_success = success;
     sema_up(&on_load);
+    /* If load failed, quit. */
+    palloc_free_page(file_name);
     //lock_release(&test);
     if (!success){
    //     sema_down(&thread_current()->on_die);
@@ -145,12 +144,13 @@ process_wait(tid_t child_tid) {
         return -1;
 
     while (target->state == 1) {
-        if(intr_get_level() == INTR_OFF) {
+       // if(intr_get_level() == INTR_OFF) {
             target->halting = true;
+        enum intr_level  old = intr_disable();
+        thread_block();
+        intr_set_level(old);
 
-            thread_block();
-
-        }
+        //}
     }
 
     if (target->state == 0) {
@@ -218,7 +218,7 @@ void exit_with(int exit_status) {
         if (me != NULL && me->tid == curr->tid) {
 
             me->exit_status = exit_status;
-
+            enum intr_level old =intr_disable();
             me->state = 0;
 
             if (me->halting) {
@@ -226,10 +226,12 @@ void exit_with(int exit_status) {
 
                 thread_unblock(parent);
             }
+            intr_set_level(old);
+
         }
 
     }
-
+    printf("name %s\n ",thread_name());
 }
 
 void process_exit_with_status(int status) {
@@ -374,9 +376,6 @@ load(const char *file_name, void (**eip)(void), void **esp) {
         goto done;
     process_activate();
 
-    /* Open executable file. */
-    //-----------------------
-    // argument must be parsed before opening filesys
     char *file_name_copy = malloc(strlen(file_name) + 1);
     strlcpy(file_name_copy, file_name, strlen(file_name) + 1);
     char *ptr;
