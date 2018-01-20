@@ -113,7 +113,6 @@ struct thread {
     uint32_t *pagedir;                  /* Page directory. */
     int exit_status;
     struct file* process_exe;
-
 #endif
 
     /* Owned by thread.c. */
@@ -133,6 +132,7 @@ struct child {
     int32_t exit_status;
     tid_t tid;
     int state;
+    struct semaphore *forwait;
     struct  list_elem elem;
 
 };

@@ -25,8 +25,9 @@ static thread_func start_process NO_RETURN;
 static struct lock crea;
 static struct semaphore on_load;
 static struct semaphore on_die;
-static  struct  lock test;
+static struct lock test;
 static bool load_success;
+
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
 
 /* Starts a new thread running a user program loaded from
@@ -40,9 +41,9 @@ process_execute(const char *file_name) {
     tid_t tid;
     lock_init(&crea);
     lock_init(&test);
-    sema_init(&on_load,0);
+    sema_init(&on_load, 0);
     load_success = false;
-    sema_init(&on_die,0);
+    sema_init(&on_die, 0);
     /* Make a copy of FILE_NAME.
        Otherwise there's a race between the caller and load(). */
     fn_copy = palloc_get_page(0);
@@ -58,8 +59,6 @@ process_execute(const char *file_name) {
     char *ptr;
 
     file_name_copy = strtok_r(file_name_copy, " ", &ptr);
-
-    //file_name_copy --> thread name
     lock_acquire(&crea);
     tid = thread_create(file_name_copy, PRI_DEFAULT, start_process, fn_copy);
     if (tid == TID_ERROR)
@@ -71,11 +70,8 @@ process_execute(const char *file_name) {
     tc->halting = 0;
     list_push_back(&thread_current()->children, &tc->elem);
     lock_release(&crea);
-    //lock_acquire(&test);
-    //lock_release(&test);
     sema_down(&on_load);
-    if(load_success == true){
-        //sema_up(&on_die);
+    if (load_success == true) {
         return tid;
     }
     sema_up(&on_die);
@@ -102,9 +98,7 @@ start_process(void *file_name_) {
     sema_up(&on_load);
     /* If load failed, quit. */
     palloc_free_page(file_name);
-    //lock_release(&test);
-    if (!success){
-   //     sema_down(&thread_current()->on_die);
+    if (!success) {
         sema_down(&on_die);
         thread_exit();
     }
@@ -132,6 +126,7 @@ start_process(void *file_name_) {
 int
 process_wait(tid_t child_tid) {
     struct thread *curr = thread_current();
+
     struct child *target;
     struct list_elem *e;
     bool is_child = false;
@@ -139,24 +134,18 @@ process_wait(tid_t child_tid) {
         target = list_entry(e, struct child, elem);
         is_child |= (target->tid == child_tid);
     }
-
-    if (!is_child)
+    if (!is_child || e == NULL)
         return -1;
-
     while (target->state == 1) {
-       // if(intr_get_level() == INTR_OFF) {
-            target->halting = true;
-        enum intr_level  old = intr_disable();
+        target->halting = true;
+        enum intr_level old = intr_disable();
         thread_block();
         intr_set_level(old);
-
-        //}
     }
 
     if (target->state == 0) {
         return target->exit_status;
     }
-
     return -1;
 }
 
@@ -206,7 +195,6 @@ void exit_with(int exit_status) {
 
     struct thread *parent = get_thread(parent_id);
     if ((parent) != NULL) {
-        //consider sync
         bool found = false;
         struct child *me = NULL;
         struct list_elem *e = NULL;
@@ -218,12 +206,11 @@ void exit_with(int exit_status) {
         if (me != NULL && me->tid == curr->tid) {
 
             me->exit_status = exit_status;
-            enum intr_level old =intr_disable();
+            enum intr_level old = intr_disable();
             me->state = 0;
 
             if (me->halting) {
                 me->halting = false;
-
                 thread_unblock(parent);
             }
             intr_set_level(old);
@@ -231,7 +218,6 @@ void exit_with(int exit_status) {
         }
 
     }
-    printf("name %s\n ",thread_name());
 }
 
 void process_exit_with_status(int status) {
@@ -239,7 +225,6 @@ void process_exit_with_status(int status) {
         return;
     }
     thread_current()->exit_status = status;
-   // process_exit();
     printf("%s: exit(%d)\n", thread_name(), status);
 
 }
@@ -455,8 +440,6 @@ load(const char *file_name, void (**eip)(void), void **esp) {
         goto done;
     }
 
-
-
     /* Start address. */
     *eip = (void (*)(void)) ehdr.e_entry;
 
@@ -464,7 +447,7 @@ load(const char *file_name, void (**eip)(void), void **esp) {
     thread_current()->process_exe = file;
     file_deny_write(file);
     return success;
-done:
+    done:
     /* We arrive here whether the load is not. */
     file_close(file);
     return success;
@@ -473,7 +456,7 @@ done:
 /* load() helpers. */
 
 
-bool is_ELF(struct file* fil) {
+bool is_ELF(struct file *fil) {
     struct Elf32_Ehdr ehdr;
     if (file_read(fil, &ehdr, sizeof ehdr) != sizeof ehdr
         || memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -482,10 +465,11 @@ bool is_ELF(struct file* fil) {
         || ehdr.e_version != 1
         || ehdr.e_phentsize != sizeof(struct Elf32_Phdr)
         || ehdr.e_phnum > 1024) {
-        return  false;
+        return false;
     }
     return true;
 }
+
 static bool install_page(void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
@@ -599,11 +583,7 @@ setup_stack(void **esp, char *file_name) {
     if (kpage != NULL) {
         success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
         if (success)
-            *esp = PHYS_BASE;   // temporary changed till parsing arguments
-            // start here adding arguments to stack & keep track of their
-            // addresses : starting from right to left
-            //then add fake return
-
+            *esp = PHYS_BASE;
         else {
             palloc_free_page(kpage);
 
@@ -625,7 +605,7 @@ setup_stack(void **esp, char *file_name) {
     int addresses[argc];
 
     for (i = argc - 1; i >= 0; i--) {
-//
+
         *esp -= strlen(argv[i]) + 1;
         memcpy(*esp, argv[i], strlen(argv[i]) + 1);
         addresses[i] = (int) *esp;
@@ -642,9 +622,6 @@ setup_stack(void **esp, char *file_name) {
         *esp -= sizeof(int);
         memcpy(*esp, &addresses[i], sizeof(int));
     }
-
-    //hex_dump((uintptr_t) *esp, *esp, sizeof(char) * 30, true);
-
     int pt = *esp;
     *esp -= sizeof(int);
     memcpy(*esp, &pt, sizeof(int));

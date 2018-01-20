@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "devices/kbd.h"
 #include "devices/input.h"
 #include "devices/serial.h"
@@ -29,6 +30,7 @@
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
 #else
+
 #include "tests/threads/tests.h"
 #endif
 #ifdef FILESYS
@@ -285,12 +287,12 @@ run_task (char **argv)
   
   printf ("Executing '%s':\n", task);
 #ifdef USERPROG
-  process_wait (process_execute (task));
-#else
-  run_test (task);
-#endif
-  printf ("Execution of '%s' complete.\n", task);
-}
+     process_wait (process_execute (task));
+    #else
+        run_test (task);
+    #endif
+    printf ("Execution of '%s' complete.\n", task);
+ }
 
 /* Executes all of the actions specified in ARGV[]
    up to the null pointer sentinel. */

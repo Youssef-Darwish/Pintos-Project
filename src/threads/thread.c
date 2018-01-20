@@ -221,7 +221,6 @@ thread_create(const char *name, int priority,
     /* Initialize thread. */
     init_thread(t, name, priority);
     tid = t->tid = allocate_tid();
-
     t->parent_id = thread_current()->tid;
     /* Prepare thread for first run by initializing its stack.
        Do this atomically so intermediate values for the 'stack'
@@ -287,12 +286,6 @@ thread_unblock(struct thread *t) {
     ASSERT (t->status == THREAD_BLOCKED);
     list_insert_ordered(&ready_list, &(t->elem), priority_greater_than, NULL);
     t->status = THREAD_READY;
-//    if (t->priority > thread_current()->priority) {
-//        if (intr_context())
-//            intr_yield_on_return();
-//        else
-//            thread_yield();
-//    }
     intr_set_level(old_level);
 }
 
@@ -339,13 +332,6 @@ thread_exit(void) {
     /* Remove thread from all threads list, set our status to dying,
        and schedule another process.  That process will destroy us
        when it calls thread_schedule_tail(). */
-//    struct list_elem *e;
-//    struct thread *me;
-//    bool found = false;
-//    for (e = list_begin(&all_list); e != list_end(&all_list) && (!found); e = list_next(e)) {
-//        me = list_entry(e, struct thread, allelem);
-//        printf("%s mawgod \n",me->name);
-//    }
     intr_disable();
     list_remove(&thread_current()->allelem);
     thread_current()->status = THREAD_DYING;
@@ -541,16 +527,14 @@ init_thread(struct thread *t, const char *name, int priority) {
         t->recent_cpu = thread_current()->recent_cpu;
     t->blocking_lock = NULL;
     t->magic = THREAD_MAGIC;
+#ifdef USERPROG
     t->exit_status = 0;
-
+#endif
     list_init(&t->donors);
     list_push_back(&all_list, &t->allelem);
     list_init(&t->children);
     list_init(&t->files);
     t->fir_fid = 2;
-   // struct  child *tc = malloc(sizeof(struct child));
-    //thread_current();
-
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -575,8 +559,6 @@ struct thread *get_thread(tid_t id) {
         is_parent |= (parent->tid == id);
     }
 
-//    if(!is_parent)
-//    printf("%d nononnono\n",is_parent);
     if (is_parent)
         return parent;
     return NULL;

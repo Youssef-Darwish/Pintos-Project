@@ -6,8 +6,8 @@
 #include "tests/lib.h"
 
 int
-main (int argc, char *argv[]) 
-{
+main (int argc, char *argv[]) {
+
   int i;
 
   test_name = "args";
