@@ -38,7 +38,9 @@ struct inode
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
   };
-
+int deny_write_cnt(struct inode* i) {
+  return i->deny_write_cnt;
+}
 /* Returns the block device sector that contains byte offset POS
    within INODE.
    Returns -1 if INODE does not contain data for a byte at offset

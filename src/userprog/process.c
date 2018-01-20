@@ -25,6 +25,7 @@ static thread_func start_process NO_RETURN;
 static struct lock crea;
 static struct semaphore on_load;
 static struct semaphore on_die;
+static  struct  lock test;
 static bool load_success;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
 
@@ -38,6 +39,7 @@ process_execute(const char *file_name) {
     char *file_name_copy;
     tid_t tid;
     lock_init(&crea);
+    lock_init(&test);
     sema_init(&on_load,0);
     load_success = false;
     sema_init(&on_die,0);
@@ -69,9 +71,11 @@ process_execute(const char *file_name) {
     tc->halting = 0;
     list_push_back(&thread_current()->children, &tc->elem);
     lock_release(&crea);
+    //lock_acquire(&test);
+    //lock_release(&test);
     sema_down(&on_load);
     if(load_success == true){
-        sema_up(&on_die);
+        //sema_up(&on_die);
         return tid;
     }
     sema_up(&on_die);
@@ -82,6 +86,7 @@ process_execute(const char *file_name) {
    running. */
 static void
 start_process(void *file_name_) {
+    //lock_acquire(&test);
     lock_acquire(&crea);
     lock_release(&crea);
     char *file_name = file_name_;
@@ -98,10 +103,10 @@ start_process(void *file_name_) {
     palloc_free_page(file_name);
     load_success = success;
     sema_up(&on_load);
-
+    //lock_release(&test);
     if (!success){
    //     sema_down(&thread_current()->on_die);
-        sema_up(&on_die);
+        sema_down(&on_die);
         thread_exit();
     }
 
@@ -127,14 +132,6 @@ start_process(void *file_name_) {
    does nothing. */
 int
 process_wait(tid_t child_tid) {
-
-    //return child_tid;
-    //while (true) {
-
-    //}
-
-    //thread_block_time(00);
-    //return 0;
     struct thread *curr = thread_current();
     struct child *target;
     struct list_elem *e;
@@ -148,11 +145,12 @@ process_wait(tid_t child_tid) {
         return -1;
 
     while (target->state == 1) {
-        //consider sync
-        // printf("wasalt %d\n",target->exit_status);
-        target->halting = true;
-        //waitfor = get_thread(child_tid);
-        //thread_block();
+        if(intr_get_level() == INTR_OFF) {
+            target->halting = true;
+
+            thread_block();
+
+        }
     }
 
     if (target->state == 0) {
@@ -163,7 +161,6 @@ process_wait(tid_t child_tid) {
 }
 
 void exit_with(int exit_status) {
-    // printf("dye\n");
 
     struct thread *curr = thread_current();
     struct lock *element_lock;//= list_entry(&curr->waiting_elem,struct lock,elem);
@@ -174,6 +171,19 @@ void exit_with(int exit_status) {
         for (e = list_next(it); e != list_end(&curr->donors); e = list_next(e)) {
             element_lock = list_entry(e, struct lock, elem);
             lock_release(&element_lock);
+
+        }
+
+    }
+    struct child *chi_elem;
+    it = list_begin(&curr->children);
+    if (it != list_end(&curr->children)) {
+        struct list_elem *e;
+
+        for (e = list_next(it); e != list_end(&curr->children); e = list_next(e)) {
+            chi_elem = list_entry(e, struct child, elem);
+            list_remove(&chi_elem->elem);
+            free(chi_elem);
 
         }
 
@@ -214,7 +224,7 @@ void exit_with(int exit_status) {
             if (me->halting) {
                 me->halting = false;
 
-                //   thread_unblock(parent);
+                thread_unblock(parent);
             }
         }
 
@@ -256,6 +266,7 @@ process_exit(void) {
         pagedir_destroy(pd);
     }
 
+    file_close(thread_current()->process_exe);
     exit_with(thread_current()->exit_status);
 
 }
@@ -451,15 +462,31 @@ load(const char *file_name, void (**eip)(void), void **esp) {
     *eip = (void (*)(void)) ehdr.e_entry;
 
     success = true;
-
-    done:
-    /* We arrive here whether the load is successful or not. */
+    thread_current()->process_exe = file;
+    file_deny_write(file);
+    return success;
+done:
+    /* We arrive here whether the load is not. */
     file_close(file);
     return success;
 }
 
 /* load() helpers. */
 
+
+bool is_ELF(struct file* fil) {
+    struct Elf32_Ehdr ehdr;
+    if (file_read(fil, &ehdr, sizeof ehdr) != sizeof ehdr
+        || memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7)
+        || ehdr.e_type != 2
+        || ehdr.e_machine != 3
+        || ehdr.e_version != 1
+        || ehdr.e_phentsize != sizeof(struct Elf32_Phdr)
+        || ehdr.e_phnum > 1024) {
+        return  false;
+    }
+    return true;
+}
 static bool install_page(void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in

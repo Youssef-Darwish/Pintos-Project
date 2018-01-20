@@ -13,9 +13,10 @@
 #include "filesys/filesys.h"
 
 static void syscall_handler(struct intr_frame *);
-
+struct lock  file_lock;
 void
 syscall_init(void) {
+    lock_init(&file_lock);
     intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -32,9 +33,27 @@ syscall_handler(struct intr_frame *f) {
 
     }
     switch (*esp) {
+
+        case SYS_WAIT:
+            wait(f);
+            return;
+        case SYS_EXEC:
+            exec(f);
+            return;
         case SYS_HALT :
             halt(f);
+            return;
+
+        case SYS_EXIT:
+            exit(f);
+            return;
+        default:
+
             break;
+    }
+//        lock_acquire(&file_lock);
+        switch (*esp) {
+
         case SYS_FILESIZE:
             file_size(f);
             break;
@@ -43,12 +62,6 @@ syscall_handler(struct intr_frame *f) {
             break;
         case SYS_CREATE:
             create(f);
-            break;
-        case SYS_WAIT:
-            wait(f);
-            break;
-        case SYS_EXEC:
-             exec(f);
             break;
         case SYS_REMOVE:
             remove(f);
@@ -68,14 +81,12 @@ syscall_handler(struct intr_frame *f) {
         case SYS_TELL:
             tell(f);
             break;
-        case SYS_EXIT:
-            exit(f);
-            break;
         default:
             //print error message unsupported syscall
             break;
     }
 
+  //  lock_release(&file_lock);
     //
     // thread_exit();
 }
@@ -86,8 +97,9 @@ void exec(struct intr_frame *f) {
     int *arg = *esp;
     arg = check_addr(arg);
     int pid = process_execute(arg);
+   // printf("3amlataha\n");
     f->eax = pid;
-
+    return;
 }
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
@@ -186,18 +198,22 @@ void file_size(struct intr_frame *f) {
 }
 void remove(struct intr_frame *f) {
 
+    int *arg = f->esp;
+    arg = check_addr(arg+1);
+    char *name = (char*)check_addr(*arg);
+    bool succ =filesys_remove(name);
+    if (!succ) {
+        f->eax = 0;
+        return;
+    }
+    f->eax = 1;
+    return;
 }
 
 void wait(struct intr_frame *f) {
     int *arg = f->esp;
-    arg++;
+    arg = check_addr(arg+1);
     int child_pid = *arg;
-    //
-    // printf("waiting for %d\n",child_pid);
-//    if(!is_child) {
-//        //exit w error
-//    }
-
     f->eax = (uint32_t) process_wait(child_pid);
 
 }
@@ -216,11 +232,17 @@ void open(struct intr_frame *f) {
         f->eax = -1;
         return;
     }
+    //if(is_ELF(fil)) {
+      //  file_deny_write(fil);
+        //printf("eel\n");
+    //}
     struct file_resource *nres;
     nres = malloc(sizeof(struct file_resource));
     nres->res = fil;
     nres->fd = thread_current()->fir_fid;
     nres->index = 0;
+    nres->ro = write_access(fil);
+
     list_push_back(&thread_current()->files, &nres->elem);
     thread_current()->fir_fid++;
     f->eax = nres->fd;
@@ -343,7 +365,7 @@ void write(struct intr_frame *f) {
     arg1 = check_addr(*arg1);
     esp = check_addr(esp + 1);
     unsigned size = *esp;
-    int *end = check_addr(arg1 + size);
+    //int *end = check_addr(arg1 + size-1);
     if (arg1 == NULL) {
         f->eax = -1;
         return;
@@ -356,7 +378,7 @@ void write(struct intr_frame *f) {
         f->eax = size;
 
         return;
-    } else if (fd > 1) {
+    }else if (fd > 1) {
         struct list_elem *e = NULL;
         struct file_resource *me;
         bool found = false;
@@ -369,6 +391,12 @@ void write(struct intr_frame *f) {
         if (!found) {
             f->eax = -1;
             return;
+        }
+        if(size == 0 || me->ro)
+        {
+            f->eax = 0;
+            return;
+
         }
         int b = file_write_at(me->res, buff, size, me->index);
         me->index += b;

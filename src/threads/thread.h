@@ -112,7 +112,7 @@ struct thread {
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     int exit_status;
-
+    struct file* process_exe;
 
 #endif
 
@@ -141,6 +141,7 @@ struct file_resource {
     struct file* res;
     int fd;
     int index;
+    bool ro;
     struct  list_elem elem;
 };
 /* If false (default), use round-robin scheduler.

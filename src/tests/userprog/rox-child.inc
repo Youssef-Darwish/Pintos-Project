@@ -14,6 +14,7 @@ test_main (void)
 
   /* Open child-rox, read from it, write back same data. */
   CHECK ((handle = open ("child-rox")) > 1, "open \"child-rox\"");
+    //printf("%d",is_ELF());
   CHECK (read (handle, buffer, sizeof buffer) == (int) sizeof buffer,
          "read \"child-rox\"");
   seek (handle, 0);
