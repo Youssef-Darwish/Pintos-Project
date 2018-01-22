@@ -221,9 +221,9 @@ void exit_with(int exit_status) {
 }
 
 void process_exit_with_status(int status) {
-    if (thread_tid() == 1) {
+    /*if (thread_tid() == 1) {
         return;
-    }
+    }*/
     thread_current()->exit_status = status;
     printf("%s: exit(%d)\n", thread_name(), status);
 
@@ -232,10 +232,14 @@ void process_exit_with_status(int status) {
 /* Free the current process's resources. */
 void
 process_exit(void) {
-    if (thread_tid() == 1) {
+    /*if (thread_tid() == 1) {
         return;
-    }
+    }*/
     struct thread *cur = thread_current();
+
+    file_close(thread_current()->process_exe);
+    exit_with(thread_current()->exit_status);
+
     uint32_t *pd;
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -253,8 +257,7 @@ process_exit(void) {
         pagedir_destroy(pd);
     }
 
-    file_close(thread_current()->process_exe);
-    exit_with(thread_current()->exit_status);
+
 
 }
 
